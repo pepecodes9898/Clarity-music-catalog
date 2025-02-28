@@ -52,3 +52,176 @@
 (define-private (track-exists (track-id uint))
     (is-some (map-get? music-catalog {track-id: track-id}))
 )
+
+;; Verifies if principal is track creator
+(define-private (is-track-creator (track-id uint) (user principal))
+    (match (map-get? music-catalog {track-id: track-id})
+        track-info (is-eq (get creator track-info) user)
+        false
+    )
+)
+
+;; Gets track length in seconds
+(define-private (get-track-length (track-id uint))
+    (default-to u0 
+        (get length 
+            (map-get? music-catalog {track-id: track-id})
+        )
+    )
+)
+
+;; Verifies label has valid length
+(define-private (valid-label (label (string-ascii 24)))
+    (and 
+        (> (len label) u0)
+        (< (len label) u25)
+    )
+)
+
+;; Validates a set of track labels
+(define-private (valid-label-set (labels (list 8 (string-ascii 24))))
+    (and
+        (> (len labels) u0)
+        (<= (len labels) u8)
+        (is-eq (len (filter valid-label labels)) (len labels))
+    )
+)
+
+;; ================================
+;; Public Interface Functions
+;; ================================
+
+;; Adds new track to music catalog
+(define-public (register-track 
+        (name (string-ascii 64))
+        (performer (string-ascii 32))
+        (length uint)
+        (category (string-ascii 32))
+        (labels (list 8 (string-ascii 24)))
+    )
+    (let
+        ((next-id (+ (var-get track-counter) u1)))
+
+        ;; Input validation
+        (asserts! (and (> (len name) u0) (< (len name) u65)) ERROR-BAD-SONG-NAME)
+        (asserts! (and (> (len performer) u0) (< (len performer) u33)) ERROR-BAD-SONG-NAME)
+        (asserts! (and (> length u0) (< length u10000)) ERROR-BAD-TIME-LENGTH)
+        (asserts! (and (> (len category) u0) (< (len category) u33)) ERROR-BAD-SONG-NAME)
+        (asserts! (valid-label-set labels) ERROR-BAD-SONG-NAME)
+
+        ;; Store track data
+        (map-insert music-catalog
+            {track-id: next-id}
+            {
+                name: name,
+                performer: performer,
+                creator: tx-sender,
+                length: length,
+                added-at-block: block-height,
+                category: category,
+                labels: labels
+            }
+        )
+
+        ;; Set creator access rights
+        (map-insert access-rights
+            {track-id: next-id, listener: tx-sender}
+            {can-access: true}
+        )
+
+        ;; Update counter and return ID
+        (var-set track-counter next-id)
+        (ok next-id)
+    )
+)
+
+;; Changes track ownership
+(define-public (change-track-owner (track-id uint) (new-creator principal))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+
+        ;; Validate request
+        (asserts! (track-exists track-id) ERROR-SONG-NOT-FOUND)
+        (asserts! (is-eq (get creator track-info) tx-sender) ERROR-NO-PERMISSION)
+
+        ;; Update ownership
+        (map-set music-catalog
+            {track-id: track-id}
+            (merge track-info {creator: new-creator})
+        )
+        (ok true)
+    )
+)
+
+
+;; Updates track information
+(define-public (modify-track-info 
+        (track-id uint) 
+        (updated-name (string-ascii 64)) 
+        (updated-length uint) 
+        (updated-category (string-ascii 32)) 
+        (updated-labels (list 8 (string-ascii 24)))
+    )
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+
+        ;; Validate request
+        (asserts! (track-exists track-id) ERROR-SONG-NOT-FOUND)
+        (asserts! (is-eq (get creator track-info) tx-sender) ERROR-NO-PERMISSION)
+        (asserts! (and (> (len updated-name) u0) (< (len updated-name) u65)) ERROR-BAD-SONG-NAME)
+        (asserts! (and (> updated-length u0) (< updated-length u10000)) ERROR-BAD-TIME-LENGTH)
+        (asserts! (and (> (len updated-category) u0) (< (len updated-category) u33)) ERROR-BAD-SONG-NAME)
+        (asserts! (valid-label-set updated-labels) ERROR-BAD-SONG-NAME)
+
+        ;; Update track info
+        (map-set music-catalog
+            {track-id: track-id}
+            (merge track-info {
+                name: updated-name,
+                length: updated-length,
+                category: updated-category,
+                labels: updated-labels
+            })
+        )
+        (ok true)
+    )
+)
+
+;; Retrieves complete track information
+(define-public (get-track-info (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok track-info)
+    )
+)
+
+;; Checks if user has track access permissions
+(define-public (check-listener-access (track-id uint) (listener principal))
+    (let
+        ((access-info (unwrap! (map-get? access-rights {track-id: track-id, listener: listener}) ERROR-SONG-NOT-FOUND)))
+        (ok (get can-access access-info))
+    )
+)
+
+;; Gets track creator address
+(define-public (lookup-track-creator (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get creator track-info))
+    )
+)
+
+;; Gets total track count in catalog
+(define-public (get-catalog-size)
+    (ok (var-get track-counter))
+)
+
+;; Gets track music category
+(define-public (lookup-track-category (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get category track-info))
+    )
+)
+
+
