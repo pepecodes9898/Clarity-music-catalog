@@ -152,3 +152,76 @@
         (ok true)
     )
 )
+
+
+;; Updates track information
+(define-public (modify-track-info 
+        (track-id uint) 
+        (updated-name (string-ascii 64)) 
+        (updated-length uint) 
+        (updated-category (string-ascii 32)) 
+        (updated-labels (list 8 (string-ascii 24)))
+    )
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+
+        ;; Validate request
+        (asserts! (track-exists track-id) ERROR-SONG-NOT-FOUND)
+        (asserts! (is-eq (get creator track-info) tx-sender) ERROR-NO-PERMISSION)
+        (asserts! (and (> (len updated-name) u0) (< (len updated-name) u65)) ERROR-BAD-SONG-NAME)
+        (asserts! (and (> updated-length u0) (< updated-length u10000)) ERROR-BAD-TIME-LENGTH)
+        (asserts! (and (> (len updated-category) u0) (< (len updated-category) u33)) ERROR-BAD-SONG-NAME)
+        (asserts! (valid-label-set updated-labels) ERROR-BAD-SONG-NAME)
+
+        ;; Update track info
+        (map-set music-catalog
+            {track-id: track-id}
+            (merge track-info {
+                name: updated-name,
+                length: updated-length,
+                category: updated-category,
+                labels: updated-labels
+            })
+        )
+        (ok true)
+    )
+)
+
+;; Retrieves complete track information
+(define-public (get-track-info (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok track-info)
+    )
+)
+
+;; Checks if user has track access permissions
+(define-public (check-listener-access (track-id uint) (listener principal))
+    (let
+        ((access-info (unwrap! (map-get? access-rights {track-id: track-id, listener: listener}) ERROR-SONG-NOT-FOUND)))
+        (ok (get can-access access-info))
+    )
+)
+
+;; Gets track creator address
+(define-public (lookup-track-creator (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get creator track-info))
+    )
+)
+
+;; Gets total track count in catalog
+(define-public (get-catalog-size)
+    (ok (var-get track-counter))
+)
+
+;; Gets track music category
+(define-public (lookup-track-category (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get category track-info))
+    )
+)
+
+
