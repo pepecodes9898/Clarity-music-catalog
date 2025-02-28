@@ -225,3 +225,125 @@
 )
 
 
+;; Gets track labels/tags
+(define-public (lookup-track-labels (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get labels track-info))
+    )
+)
+
+;; Gets track performer name
+(define-public (lookup-track-performer (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get performer track-info))
+    )
+)
+
+;; Gets track title
+(define-public (lookup-track-name (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get name track-info))
+    )
+)
+
+;; Gets track length in seconds
+(define-public (lookup-track-length (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get length track-info))
+    )
+)
+
+;; Gets track metadata/labels
+(define-public (get-track-metadata (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get labels track-info))
+    )
+)
+
+;; Gets block when track was added
+(define-public (lookup-track-creation-block (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get added-at-block track-info))
+    )
+)
+
+;; Gets track length by creator only
+(define-public (get-creator-only-track-length (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (asserts! (is-eq (get creator track-info) tx-sender) ERROR-NO-PERMISSION)
+        (ok (get length track-info))
+    )
+)
+
+;; Verifies listener access to track
+(define-public (verify-listener-access (track-id uint) (listener principal))
+    (let
+        ((access-info (unwrap! (map-get? access-rights {track-id: track-id, listener: listener}) ERROR-SONG-NOT-FOUND)))
+        (ok (get can-access access-info))
+    )
+)
+
+;; Gets all track labels
+(define-public (get-all-track-labels (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get labels track-info))
+    )
+)
+
+;; Checks if track exists in catalog
+(define-public (is-track-in-catalog (track-id uint))
+    (let
+        ((exists (is-some (map-get? music-catalog {track-id: track-id}))))
+        (ok exists)
+    )
+)
+
+;; Removes track from catalog
+(define-public (delete-track (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+
+        ;; Validate request
+        (asserts! (track-exists track-id) ERROR-SONG-NOT-FOUND)
+        (asserts! (is-eq (get creator track-info) tx-sender) ERROR-NO-PERMISSION)
+
+        ;; Remove track data
+        (map-delete music-catalog {track-id: track-id})
+        (map-delete access-rights {track-id: track-id, listener: tx-sender})
+        (ok true)
+    )
+)
+
+;; ================================
+;; Extended Functionality
+;; ================================
+
+;; Changes track ownership with access verification
+(define-public (change-owner-with-access-check 
+        (track-id uint) 
+        (new-creator principal)
+    )
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (asserts! (is-eq (get creator track-info) tx-sender) ERROR-NO-PERMISSION)
+        (asserts! (track-exists track-id) ERROR-SONG-NOT-FOUND)
+        ;; Verify new owner has access rights
+        (let ((access-info (unwrap! (map-get? access-rights {track-id: track-id, listener: new-creator}) ERROR-ACCESS-FORBIDDEN)))
+            (asserts! (get can-access access-info) ERROR-ACCESS-FORBIDDEN)
+        )
+        ;; Transfer ownership
+        (map-set music-catalog
+            {track-id: track-id}
+            (merge track-info {creator: new-creator})
+        )
+        (ok true)
+    )
+)
