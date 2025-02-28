@@ -347,3 +347,107 @@
         (ok true)
     )
 )
+
+;; Notifies about ownership change
+(define-private (send-ownership-notification (track-id uint) (new-creator principal))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (list (get creator track-info) new-creator))
+    )
+)
+
+;; Optimized track data retrieval
+(define-public (get-fast-track-lookup (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok track-info)
+    )
+)
+
+;; Validates track length range
+(define-private (check-valid-length (length uint))
+    (and (> length u0) (< length u60000))
+)
+
+;; Tracks listening history for analytics
+(define-map listener-history
+    {track-id: uint, listener: principal}
+    {timestamp: uint, interaction: (string-ascii 32)}
+)
+
+;; Verifies track creator before changes
+(define-private (validate-creator-permission (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (asserts! (is-eq (get creator track-info) tx-sender) ERROR-NO-PERMISSION)
+        (ok true)
+    )
+)
+
+;; Optimized track storage structure
+(define-map track-catalog-optimized
+    {track-id: uint}
+    {name: (string-ascii 64), performer: (string-ascii 32), creator: principal, length: uint, category: (string-ascii 32)}
+)
+
+;; UI function to display track owner
+(define-public (display-track-creator (track-id uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (ok (get creator track-info))
+    )
+)
+
+;; Enhanced name validation
+(define-private (verify-name-format (name (string-ascii 64)))
+    (and (> (len name) u4) (< (len name) u65))
+)
+
+;; Validates update permissions
+(define-private (verify-update-rights (track-id uint))
+    (let
+        ((track-creator (get creator (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-NO-PERMISSION))))
+        (asserts! (is-eq tx-sender track-creator) ERROR-NO-PERMISSION)
+        (ok true)
+    )
+)
+
+;; Track registration with enhanced validation
+(define-public (register-track-with-validation 
+        (name (string-ascii 64))
+        (performer (string-ascii 32))
+        (length uint)
+        (category (string-ascii 32))
+        (labels (list 8 (string-ascii 24)))
+    )
+    (begin
+        (asserts! (> (len name) u0) ERROR-BAD-SONG-NAME)
+        (asserts! (> length u0) ERROR-BAD-TIME-LENGTH)
+        (register-track name performer length category labels)
+    )
+)
+
+;; Public function to check ownership
+(define-read-only (verify-track-ownership
+        (track-id uint)
+    )
+    (ok (is-track-creator track-id tx-sender))
+)
+
+;; Royalty payment system
+(define-public (distribute-royalty (track-id uint) (payment-amount uint))
+    (let
+        ((track-info (unwrap! (map-get? music-catalog {track-id: track-id}) ERROR-SONG-NOT-FOUND)))
+        (let
+            ((artist (get performer track-info)))
+            ;; Royalty payment logic would go here
+            (ok true)
+        )
+    )
+)
+
+;; Sharing rewards system
+(define-public (give-sharing-reward (track-id uint) (listener principal))
+    ;; Reward logic would go here
+    (ok true)
+)
